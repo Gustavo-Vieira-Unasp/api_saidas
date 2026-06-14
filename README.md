@@ -65,9 +65,9 @@ copy .env.example .env   # edite os valores secretos
 docker compose up --build
 ```
 
-### Produção (Render + Vercel)
+### Produção ($0 — Render free + Vercel free)
 
-Backend no [Render](https://render.com) (Docker + disco persistente) e frontend na [Vercel](https://vercel.com). Guia passo a passo: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Backend no [Render](https://render.com) (plano free) e frontend na [Vercel](https://vercel.com) (Hobby). Guia: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
 ## Documentação
 

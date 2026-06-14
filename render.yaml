@@ -1,8 +1,9 @@
-# Render Blueprint — https://render.com/docs/blueprint-spec
+# Render Blueprint (free tier) — https://render.com/docs/blueprint-spec
 # Connect this repo in Render Dashboard → New → Blueprint.
 #
-# Requires Starter plan or higher for persistent disk (SQLite + screenshots).
-# Playwright needs ~1 GB RAM; use at least Starter.
+# $0/month — service sleeps after ~15 min idle; no persistent disk.
+# DB and screenshots are ephemeral (lost on redeploy). Scheduled jobs only
+# run while the service is awake. See docs/DEPLOY.md for limits and upgrades.
 
 services:
   - type: web
@@ -10,19 +11,15 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: starter
+    plan: free
     region: oregon
     healthCheckPath: /health
     autoDeploy: true
-    disk:
-      name: api-saidas-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: DATABASE_URL
-        value: sqlite:////data/saidas.db
+        value: sqlite:///./saidas.db
       - key: SCREENSHOTS_DIR
-        value: /data/screenshots
+        value: ./screenshots
       - key: PLAYWRIGHT_HEADLESS
         value: "true"
       - key: SCHEDULER_TIMEZONE
@@ -34,11 +31,11 @@ services:
       # Set in Render Dashboard after Vercel deploy (comma-separated for multiple URLs):
       - key: FRONTEND_ORIGIN
         sync: false
-      # Optional: allow Vercel preview deployments (main + branch previews)
+      # Allow Vercel preview deployments (main + branch previews)
       - key: CORS_ORIGIN_REGEX
         value: https://.*\.vercel\.app
       - key: SECRET_KEY
         generateValue: true
-      # Must be a valid Fernet key — set manually in Render Dashboard (see docs/DEPLOY.md)
+      # Valid Fernet key — set manually in Render Dashboard (see docs/DEPLOY.md)
       - key: ENCRYPTION_KEY
         sync: false
