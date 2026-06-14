@@ -1,5 +1,9 @@
+import os
+import secrets
 from functools import lru_cache
+from pathlib import Path
 
+from cryptography.fernet import Fernet
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -53,15 +57,63 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def bootstrap_production_secrets() -> None:
+    """On Render, create/load secrets when env vars are missing.
+
+    Render free tier has no persistent disk; secrets stored in env (Render
+    dashboard) survive redeploys. File fallback survives restarts within the
+    same container until the next redeploy.
+    """
+    if not os.getenv("RENDER"):
+        return
+
+    app_dir = Path.cwd()
+    changed = False
+
+    if not os.getenv("ENCRYPTION_KEY", "").strip():
+        key_file = app_dir / ".encryption_key"
+        if key_file.exists():
+            os.environ["ENCRYPTION_KEY"] = key_file.read_text().strip()
+        else:
+            os.environ["ENCRYPTION_KEY"] = Fernet.generate_key().decode()
+            key_file.write_text(os.environ["ENCRYPTION_KEY"])
+        changed = True
+
+    if os.getenv("SECRET_KEY", "change-me-jwt-secret") == "change-me-jwt-secret":
+        secret_file = app_dir / ".secret_key"
+        if secret_file.exists():
+            os.environ["SECRET_KEY"] = secret_file.read_text().strip()
+        else:
+            os.environ["SECRET_KEY"] = secrets.token_urlsafe(48)
+            secret_file.write_text(os.environ["SECRET_KEY"])
+        changed = True
+
+    if changed:
+        get_settings.cache_clear()
+
+
 def validate_settings(settings: Settings | None = None) -> None:
     """Fail fast when required secrets are missing or insecure."""
     s = settings or get_settings()
     if not s.encryption_key.strip():
-        raise RuntimeError(
-            "ENCRYPTION_KEY is required. Generate one with: "
-            'python -c "from cryptography.fernet import Fernet; '
-            'print(Fernet.generate_key().decode())"'
+        hint = (
+            "Set ENCRYPTION_KEY in Render Dashboard → Environment, or redeploy "
+            "with RENDER=true so bootstrap can generate one."
+            if os.getenv("RENDER")
+            else (
+                'Generate one with: python -c "from cryptography.fernet import '
+                'Fernet; print(Fernet.generate_key().decode())"'
+            )
         )
+        raise RuntimeError(f"ENCRYPTION_KEY is required. {hint}")
+    try:
+        Fernet(s.encryption_key.encode())
+    except Exception as exc:
+        raise RuntimeError(
+            "ENCRYPTION_KEY is not a valid Fernet key. "
+            'Generate one with: python -c "from cryptography.fernet import '
+            'Fernet; print(Fernet.generate_key().decode())"'
+        ) from exc
     if s.secret_key == "change-me-jwt-secret":
         raise RuntimeError(
             "SECRET_KEY must be set to a unique value. Generate one with: "
@@ -69,4 +121,5 @@ def validate_settings(settings: Settings | None = None) -> None:
         )
 
 
+bootstrap_production_secrets()
 settings = get_settings()

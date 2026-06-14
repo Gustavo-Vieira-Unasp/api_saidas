@@ -36,6 +36,7 @@ services:
         value: https://.*\.vercel\.app
       - key: SECRET_KEY
         generateValue: true
-      # Valid Fernet key — set manually in Render Dashboard (see docs/DEPLOY.md)
+      # Optional on Render — auto-generated on first boot if unset. Set manually
+      # in Dashboard to survive redeploys without re-registering users.
       - key: ENCRYPTION_KEY
         sync: false
