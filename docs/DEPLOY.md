@@ -186,6 +186,7 @@ Redeploy via Blueprint. Existing free-tier data is not migrated automatically.
 | Schedule didn’t run | Free tier was asleep — upgrade or use manual send |
 | Account gone after redeploy | Expected on free — ephemeral SQLite |
 | Playwright failed | Retry; free tier has less RAM |
+| UptimeRobot 405 | Use GET or HEAD on `/health`; redeploy latest backend |
 
 ---
 
@@ -199,3 +200,19 @@ Redeploy via Blueprint. Existing free-tier data is not migrated automatically.
 | Data persistence | Yes (local disk) | Until redeploy/sleep |
 
 Local dev: [SETUP.md](SETUP.md).
+
+---
+
+## Keep Render awake (UptimeRobot, free)
+
+Render Free sleeps after ~15 min without traffic. Ping every **5 minutes** to stay awake.
+
+1. [UptimeRobot](https://uptimerobot.com) → **Add monitor**
+2. **Monitor type:** HTTP(s)
+3. **URL:** `https://YOUR-BACKEND.onrender.com/health`
+4. **HTTP method:** **HEAD** or **GET** (both work after latest deploy)
+5. **Interval:** 5 minutes
+
+Optional keyword check on GET: `"database": "ok"`.
+
+**Note:** HEAD requests returned 405 before — fixed in the API. Redeploy Render after pulling latest code, or switch the monitor to **GET** until redeployed.

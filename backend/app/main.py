@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from fastapi.responses import Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
@@ -54,6 +56,11 @@ def health_root() -> dict:
     return {"status": "ok", "service": "unasp-exit-automation"}
 
 
+@app.head("/", tags=["health"])
+def health_root_head() -> Response:
+    return Response(status_code=200)
+
+
 @app.get("/health", tags=["health"])
 def health(db: Session = Depends(get_db)) -> dict:
     db_ok = False
@@ -73,3 +80,13 @@ def health(db: Session = Depends(get_db)) -> dict:
         "scheduler_running": scheduler.running,
         "scheduled_jobs": job_count,
     }
+
+
+@app.head("/health", tags=["health"])
+def health_head(db: Session = Depends(get_db)) -> Response:
+    """UptimeRobot and similar monitors often use HEAD."""
+    try:
+        db.execute(text("SELECT 1"))
+        return Response(status_code=200)
+    except Exception:
+        return Response(status_code=503)
