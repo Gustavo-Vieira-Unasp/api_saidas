@@ -1,0 +1,18 @@
+# Lower-bound pins so pip resolves versions with wheels for the local Python
+# (works on Python 3.11 through 3.14). Re-pin exactly with `pip freeze` if you
+# want fully reproducible installs.
+fastapi>=0.115
+uvicorn[standard]>=0.34
+sqlalchemy>=2.0.36
+pydantic>=2.11
+pydantic-settings>=2.7
+python-jose[cryptography]>=3.3
+bcrypt>=4.0
+python-multipart>=0.0.20
+cryptography>=44
+apscheduler>=3.11
+playwright>=1.50
+slowapi>=0.1.9
+alembic>=1.14
+email-validator>=2.2
+greenlet>=3.2

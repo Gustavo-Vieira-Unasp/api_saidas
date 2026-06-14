@@ -1,0 +1,37 @@
+# Copy .env.example to .env and fill SECRET_KEY + ENCRYPTION_KEY before starting.
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      SECRET_KEY: ${SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      DATABASE_URL: sqlite:////data/saidas.db
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      PENSIONATO_BASE_URL: ${PENSIONATO_BASE_URL:-https://pensionato.unasp.edu.br/}
+      PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
+      SCREENSHOTS_DIR: /data/screenshots
+      SCHEDULER_TIMEZONE: ${SCHEDULER_TIMEZONE:-America/Sao_Paulo}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+    volumes:
+      - backend_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+volumes:
+  backend_data:

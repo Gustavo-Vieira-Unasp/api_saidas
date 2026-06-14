@@ -1,0 +1,44 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Connect this repo in Render Dashboard → New → Blueprint.
+#
+# Requires Starter plan or higher for persistent disk (SQLite + screenshots).
+# Playwright needs ~1 GB RAM; use at least Starter.
+
+services:
+  - type: web
+    name: api-saidas-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: api-saidas-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////data/saidas.db
+      - key: SCREENSHOTS_DIR
+        value: /data/screenshots
+      - key: PLAYWRIGHT_HEADLESS
+        value: "true"
+      - key: SCHEDULER_TIMEZONE
+        value: America/Sao_Paulo
+      - key: PENSIONATO_BASE_URL
+        value: https://pensionato.unasp.edu.br/
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      # Set in Render Dashboard after Vercel deploy (comma-separated for multiple URLs):
+      - key: FRONTEND_ORIGIN
+        sync: false
+      # Optional: allow Vercel preview deployments (main + branch previews)
+      - key: CORS_ORIGIN_REGEX
+        value: https://.*\.vercel\.app
+      - key: SECRET_KEY
+        generateValue: true
+      # Must be a valid Fernet key — set manually in Render Dashboard (see docs/DEPLOY.md)
+      - key: ENCRYPTION_KEY
+        sync: false

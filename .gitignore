@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+*.db
+*.sqlite3
+
+# Environment
+.env
+*.env
+!.env.example
+
+# Playwright
+playwright-report/
+test-results/
+screenshots/
+*.png
+!docs/**/*.png
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Cursor IDE
+.cursor/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Logs
+*.log
+logs/

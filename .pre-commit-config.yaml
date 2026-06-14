@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: block-env-files
+        name: block .env files from commit
+        entry: python -c "import sys; [sys.exit(1) for f in sys.argv[1:] if f.endswith('.env') or '/.env' in f.replace('\\\\','/')]; sys.exit(0)"
+        language: system
+        files: \.env$

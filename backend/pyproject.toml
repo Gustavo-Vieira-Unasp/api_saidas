@@ -1,0 +1,18 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = ["E402", "I001"]
+"app/automation/discover.py" = ["E501"]
+"app/automation/run_once.py" = ["E501"]
+"app/automation/pensionato.py" = ["E501"]
