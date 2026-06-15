@@ -52,7 +52,10 @@ uvicorn app.main:app --reload
 - Docs interativas (Swagger UI): `http://localhost:8000/docs`
 
 O arquivo do banco SQLite (`saidas.db`) e as tabelas são criados automaticamente
-na primeira execução. Para evoluir o schema em bancos existentes, use Alembic:
+na primeira execução. **Desenvolvimento local usa SQLite**; **produção (Render) usa
+Supabase Postgres** via `DATABASE_URL` — veja [DEPLOY.md](DEPLOY.md).
+
+Para evoluir o schema em bancos SQLite existentes, use Alembic localmente:
 
 ```bash
 cd backend
@@ -111,3 +114,4 @@ inicia** sem `SECRET_KEY` e `ENCRYPTION_KEY` válidos no `.env` da raiz.
 | Erros de CORS no console do navegador | Garanta que `FRONTEND_ORIGIN` no `.env` corresponde à URL do frontend. |
 | Envios sempre falham                  | Confira os seletores em `field_map.py` e suas credenciais do UNASP. |
 | Tarefas agendadas não disparam        | Verifique `SCHEDULER_TIMEZONE` e se o backend continua rodando. |
+| Testar com Postgres localmente        | Defina `DATABASE_URL` com um Postgres local ou Supabase dev; Alembic roda no startup. |

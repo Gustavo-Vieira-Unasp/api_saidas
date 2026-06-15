@@ -1,9 +1,9 @@
 # Render Blueprint (free tier) — https://render.com/docs/blueprint-spec
 # Connect this repo in Render Dashboard → New → Blueprint.
 #
-# $0/month — service sleeps after ~15 min idle; no persistent disk.
-# DB and screenshots are ephemeral (lost on redeploy). Scheduled jobs only
-# run while the service is awake. See docs/DEPLOY.md for limits and upgrades.
+# $0/month — service sleeps after ~15 min idle; no persistent disk for screenshots.
+# Database lives in Supabase Postgres (set DATABASE_URL in Dashboard). Scheduled jobs
+# only run while the service is awake. See docs/DEPLOY.md for limits and upgrades.
 
 services:
   - type: web
@@ -16,8 +16,9 @@ services:
     healthCheckPath: /health
     autoDeploy: true
     envVars:
+      # Supabase Session mode URI (port 5432) — paste in Render Dashboard, never commit:
       - key: DATABASE_URL
-        value: sqlite:///./saidas.db
+        sync: false
       - key: SCREENSHOTS_DIR
         value: ./screenshots
       - key: PLAYWRIGHT_HEADLESS

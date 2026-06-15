@@ -1,17 +1,42 @@
+import logging
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
 
-connect_args = (
-    {"check_same_thread": False}
-    if settings.database_url.startswith("sqlite")
-    else {}
-)
+logger = logging.getLogger(__name__)
 
-engine = create_engine(settings.database_url, connect_args=connect_args)
+
+def _normalize_database_url(url: str) -> str:
+    """Use psycopg3 driver when a bare postgresql:// URL is supplied."""
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg://", 1)
+    return url
+
+
+def _is_postgres(url: str) -> bool:
+    return url.startswith("postgresql") or url.startswith("postgres://")
+
+
+def _create_engine(url: str):
+    if _is_postgres(url):
+        return create_engine(
+            url,
+            pool_pre_ping=True,
+            pool_recycle=300,
+        )
+    return create_engine(
+        url,
+        connect_args={"check_same_thread": False},
+    )
+
+
+engine = _create_engine(_normalize_database_url(settings.database_url))
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -28,16 +53,31 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def run_migrations() -> None:
+    """Apply Alembic migrations (Postgres production)."""
+    from alembic import command
+    from alembic.config import Config
+
+    alembic_ini = Path(__file__).resolve().parents[2] / "alembic.ini"
+    cfg = Config(str(alembic_ini))
+    cfg.set_main_option("sqlalchemy.url", _normalize_database_url(settings.database_url))
+    command.upgrade(cfg, "head")
+    logger.info("Alembic migrations applied (head)")
+
+
 def init_db() -> None:
-    """Create all tables. Import models so they register with Base.metadata."""
+    """Create or migrate tables. Import models so they register with Base.metadata."""
     from app.models import exit_request, schedule, template, user  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
-    _ensure_columns()
+    if _is_postgres(settings.database_url):
+        run_migrations()
+    else:
+        Base.metadata.create_all(bind=engine)
+        _ensure_columns()
 
 
 # Lightweight, additive migrations for columns added after a DB already exists.
-# (No Alembic in this project; create_all never alters existing tables.)
+# SQLite-only; Postgres uses Alembic.
 _ADDED_COLUMNS = {
     "schedules": {
         "date_strategy": "VARCHAR(16) DEFAULT 'fixed'",
