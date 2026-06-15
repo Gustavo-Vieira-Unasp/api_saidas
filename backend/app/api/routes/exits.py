@@ -2,7 +2,7 @@ from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,9 +23,10 @@ from app.schemas.exit_request import (
 )
 from app.services.submission import (
     SubmissionError,
+    execute_pending_submission,
     record_failed_submission,
     resolve_payload,
-    run_submission_async,
+    start_submission,
 )
 
 router = APIRouter(prefix="/exits", tags=["exits"])
@@ -51,29 +52,33 @@ def _date_range(req: ExitBatchRequest) -> list:
     return days
 
 
-@router.post("/send", response_model=ExitRequestOut)
+@router.post("/send", response_model=ExitRequestOut, status_code=status.HTTP_202_ACCEPTED)
 async def send_exit(
     data: ExitSendRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     try:
-        record = await run_submission_async(
+        record = start_submission(
             db,
             user,
             template_id=data.template_id,
             payload=data.payload,
             source="manual",
-            dry_run=data.dry_run,
         )
     except SubmissionError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    background_tasks.add_task(
+        execute_pending_submission, record.id, dry_run=data.dry_run
+    )
     return record
 
 
 @router.post("/batch", response_model=ExitBatchResult)
 async def batch_exit(
     data: ExitBatchRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -131,12 +136,14 @@ async def batch_exit(
             result.scheduled.append(schedule)
         else:
             try:
-                record = await run_submission_async(
+                record = start_submission(
                     db,
                     user,
                     payload=payload,
                     source="batch",
-                    dry_run=data.dry_run,
+                )
+                background_tasks.add_task(
+                    execute_pending_submission, record.id, dry_run=data.dry_run
                 )
                 result.sent.append(record)
             except SubmissionError as exc:

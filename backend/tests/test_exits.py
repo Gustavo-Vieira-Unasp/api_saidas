@@ -27,13 +27,13 @@ def test_send_exit(mock_submit, client, auth_headers):
         },
         headers=auth_headers,
     )
-    assert response.status_code == 200
-    assert response.json()["status"] == "sent"
+    assert response.status_code == 202
+    assert response.json()["status"] == "pending"
     mock_submit.assert_awaited_once()
 
 
-@patch("app.api.routes.exits.run_submission_async", new_callable=AsyncMock)
-def test_batch_partial_failure(mock_run, client, auth_headers):
+@patch("app.api.routes.exits.start_submission")
+def test_batch_partial_failure(mock_start, client, auth_headers):
     from datetime import datetime
 
     from app.models.exit_request import ExitRequest
@@ -43,8 +43,8 @@ def test_batch_partial_failure(mock_run, client, auth_headers):
         user_id=1,
         schedule_id=None,
         payload={"data_saida": "2026-06-16"},
-        status="sent",
-        message="ok",
+        status="pending",
+        message=None,
         source="batch",
         screenshot_path=None,
         created_at=datetime.now(UTC),
@@ -52,14 +52,14 @@ def test_batch_partial_failure(mock_run, client, auth_headers):
 
     call_count = 0
 
-    async def side_effect(*args, **kwargs):
+    def side_effect(*args, **kwargs):
         nonlocal call_count
         call_count += 1
         if call_count == 2:
             raise SubmissionError("day 2 failed")
         return ok_record
 
-    mock_run.side_effect = side_effect
+    mock_start.side_effect = side_effect
 
     response = client.post(
         "/exits/batch",

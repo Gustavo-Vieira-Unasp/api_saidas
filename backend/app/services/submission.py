@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.automation.pensionato import Credentials, submit_exit
 from app.core.config import settings
 from app.core.security import decrypt_secret
+from app.db.database import SessionLocal
 from app.models.exit_request import ExitRequest
 from app.models.template import Template
 from app.models.user import User
@@ -88,7 +89,7 @@ def record_failed_submission(
     return record
 
 
-async def run_submission_async(
+def start_submission(
     db: Session,
     user: User,
     *,
@@ -96,11 +97,10 @@ async def run_submission_async(
     payload: dict | None = None,
     schedule_id: int | None = None,
     source: str = "manual",
-    dry_run: bool = False,
 ) -> ExitRequest:
-    """Async entry point for FastAPI routes. Runs automation without blocking the loop."""
+    """Validate credentials and create a pending ExitRequest (no Playwright yet)."""
     resolved = resolve_payload(db, user, template_id, payload)
-    creds = _credentials(user)
+    _credentials(user)
 
     record = ExitRequest(
         user_id=user.id,
@@ -112,13 +112,62 @@ async def run_submission_async(
     db.add(record)
     db.commit()
     db.refresh(record)
+    return record
 
-    result = await submit_exit(creds, resolved, dry_run=dry_run)
 
-    record.status = result.status
-    record.message = result.message
-    record.screenshot_path = result.screenshot_path
-    db.commit()
+async def execute_pending_submission(exit_id: int, *, dry_run: bool = False) -> None:
+    """Run Playwright for an existing pending ExitRequest (uses its own DB session)."""
+    db = SessionLocal()
+    record: ExitRequest | None = None
+    try:
+        record = db.get(ExitRequest, exit_id)
+        if record is None or record.status != "pending":
+            return
+
+        user = record.user
+        creds = _credentials(user)
+        result = await submit_exit(creds, record.payload, dry_run=dry_run)
+
+        record.status = result.status
+        record.message = result.message
+        record.screenshot_path = result.screenshot_path
+        db.commit()
+    except SubmissionError as exc:
+        logger.warning("Submission %s failed: %s", exit_id, exc)
+        if record is not None:
+            record.status = "failed"
+            record.message = str(exc)
+            db.commit()
+    except Exception as exc:
+        logger.exception("Submission %s failed unexpectedly", exit_id)
+        if record is not None:
+            record.status = "failed"
+            record.message = str(exc)
+            db.commit()
+    finally:
+        db.close()
+
+
+async def run_submission_async(
+    db: Session,
+    user: User,
+    *,
+    template_id: int | None = None,
+    payload: dict | None = None,
+    schedule_id: int | None = None,
+    source: str = "manual",
+    dry_run: bool = False,
+) -> ExitRequest:
+    """Run submission inline (used by scheduler and tests)."""
+    record = start_submission(
+        db,
+        user,
+        template_id=template_id,
+        payload=payload,
+        schedule_id=schedule_id,
+        source=source,
+    )
+    await execute_pending_submission(record.id, dry_run=dry_run)
     db.refresh(record)
     return record
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,8 +19,9 @@ from app.schemas.schedule import (
 from app.services.submission import (
     SubmissionError,
     apply_date_strategy,
+    execute_pending_submission,
     resolve_payload,
-    run_submission_async,
+    start_submission,
 )
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
@@ -131,9 +132,10 @@ def delete_schedule(
     db.commit()
 
 
-@router.post("/run-bulk", response_model=list[ExitRequestOut])
-async def run_bulk(
+@router.post("/run-bulk", response_model=list[ExitRequestOut], status_code=status.HTTP_202_ACCEPTED)
+def run_bulk(
     data: ScheduleBulkRunRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -152,22 +154,28 @@ async def run_bulk(
         try:
             resolved = resolve_payload(db, user, schedule.template_id, schedule.payload)
             resolved = apply_date_strategy(resolved, schedule.date_strategy)
-            record = await run_submission_async(
+            record = start_submission(
                 db,
                 user,
                 payload=resolved,
                 schedule_id=schedule.id,
                 source="schedule",
             )
+            background_tasks.add_task(execute_pending_submission, record.id)
             results.append(record)
         except SubmissionError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
     return results
 
 
-@router.post("/{schedule_id}/run-now", response_model=ExitRequestOut)
-async def run_now(
+@router.post(
+    "/{schedule_id}/run-now",
+    response_model=ExitRequestOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def run_now(
     schedule_id: int,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -175,7 +183,7 @@ async def run_now(
     try:
         resolved = resolve_payload(db, user, schedule.template_id, schedule.payload)
         resolved = apply_date_strategy(resolved, schedule.date_strategy)
-        record = await run_submission_async(
+        record = start_submission(
             db,
             user,
             payload=resolved,
@@ -184,4 +192,5 @@ async def run_now(
         )
     except SubmissionError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    background_tasks.add_task(execute_pending_submission, record.id)
     return record

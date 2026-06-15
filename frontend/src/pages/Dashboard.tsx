@@ -57,9 +57,11 @@ export default function Dashboard() {
       const res = await sendExit(body);
       setResult(res);
       setToast(
-        dryRun
-          ? "Teste concluído (nenhum envio real)."
-          : `Solicitação enviada${res.message ? ` — ${res.message}` : "."}`
+        res.status === "pending"
+          ? "Envio iniciado. Acompanhe em Histórico (pode levar 1–3 min)."
+          : dryRun
+            ? "Teste concluído (nenhum envio real)."
+            : `Solicitação enviada${res.message ? ` — ${res.message}` : "."}`
       );
     } catch (err: any) {
       setError(err.response?.data?.detail || "Erro ao enviar");

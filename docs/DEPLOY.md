@@ -187,6 +187,7 @@ Redeploy via Blueprint. Existing free-tier data is not migrated automatically.
 | Account gone after redeploy | Expected on free — ephemeral SQLite |
 | Playwright failed | Retry; free tier has less RAM |
 | UptimeRobot 405 | Use GET or HEAD on `/health`; redeploy latest backend |
+| Enviar hangs / provisional headers | Playwright takes minutes; API now returns immediately — redeploy backend, check Histórico |
 
 ---
 

@@ -134,8 +134,18 @@ export default function SchedulePage() {
   };
 
   const runNow = async (id: number) => {
-    await runScheduleNow(id);
-    setToast("Envio disparado. Veja o resultado em Histórico.");
+    setError(null);
+    try {
+      await runScheduleNow(id);
+      setToast("Envio iniciado. Acompanhe o resultado em Histórico (1–3 min).");
+    } catch (err: unknown) {
+      const detail =
+        err && typeof err === "object" && "response" in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data
+              ?.detail
+          : undefined;
+      setError(detail || "Erro ao disparar envio");
+    }
   };
 
   const toggleSelected = (id: number) => {
