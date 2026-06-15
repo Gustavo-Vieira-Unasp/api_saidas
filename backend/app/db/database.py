@@ -23,12 +23,17 @@ def _is_postgres(url: str) -> bool:
     return url.startswith("postgresql") or url.startswith("postgres://")
 
 
+def _postgres_connect_args() -> dict:
+    return {"connect_timeout": 15}
+
+
 def _create_engine(url: str):
     if _is_postgres(url):
         return create_engine(
             url,
             pool_pre_ping=True,
             pool_recycle=300,
+            connect_args=_postgres_connect_args(),
         )
     return create_engine(
         url,
@@ -58,6 +63,7 @@ def run_migrations() -> None:
     from alembic import command
     from alembic.config import Config
 
+    logger.info("Running Alembic migrations against Postgres…")
     alembic_ini = Path(__file__).resolve().parents[2] / "alembic.ini"
     cfg = Config(str(alembic_ini))
     cfg.set_main_option("sqlalchemy.url", _normalize_database_url(settings.database_url))
