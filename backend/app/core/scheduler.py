@@ -19,6 +19,7 @@ from apscheduler.triggers.date import DateTrigger
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.db.database import _normalize_database_url
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,11 @@ _scheduler: BackgroundScheduler | None = None
 def get_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is None:
-        jobstores = {"default": SQLAlchemyJobStore(url=settings.database_url)}
+        jobstores = {
+            "default": SQLAlchemyJobStore(
+                url=_normalize_database_url(settings.database_url)
+            )
+        }
         _scheduler = BackgroundScheduler(
             jobstores=jobstores, timezone=settings.scheduler_timezone
         )
