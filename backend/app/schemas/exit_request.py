@@ -1,8 +1,9 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_serializer, model_validator
 
+from app.core.timezone_utils import to_utc_iso
 from app.schemas.schedule import ScheduleOut
 
 
@@ -66,6 +67,10 @@ class ExitRequestOut(BaseModel):
     source: str
     screenshot_path: str | None
     created_at: datetime
+
+    @field_serializer("created_at")
+    def _serialize_created_at(self, value: datetime) -> str:
+        return to_utc_iso(value) or value.isoformat()
 
 
 class ExitBatchFailure(BaseModel):

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.scheduler import register_schedule, remove_schedule
+from app.core.timezone_utils import to_scheduler_naive
 from app.db.database import get_db
 from app.models.schedule import Schedule
 from app.models.template import Template
@@ -63,7 +64,7 @@ def create_schedule(
         template_id=data.template_id,
         payload=data.payload,
         trigger_type=data.trigger_type,
-        run_at=data.run_at,
+        run_at=to_scheduler_naive(data.run_at),
         hour=data.hour,
         minute=data.minute,
         cron=data.cron,
@@ -111,6 +112,8 @@ def update_schedule(
     ):
         value = getattr(data, field)
         if value is not None:
+            if field == "run_at":
+                value = to_scheduler_naive(value)
             setattr(schedule, field, value)
 
     db.commit()

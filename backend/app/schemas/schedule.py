@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_serializer, model_validator
+
+from app.core.timezone_utils import to_scheduler_iso, to_utc_iso
 
 TriggerType = Literal["once", "daily", "weekdays", "cron"]
 DateStrategy = Literal["fixed", "today", "tomorrow"]
@@ -75,3 +77,11 @@ class ScheduleOut(BaseModel):
     enabled: bool
     last_run_at: datetime | None
     created_at: datetime
+
+    @field_serializer("run_at")
+    def _serialize_run_at(self, value: datetime | None) -> str | None:
+        return to_scheduler_iso(value)
+
+    @field_serializer("last_run_at", "created_at")
+    def _serialize_utc(self, value: datetime | None) -> str | None:
+        return to_utc_iso(value)

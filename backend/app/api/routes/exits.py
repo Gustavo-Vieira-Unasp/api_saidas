@@ -1,6 +1,5 @@
 from datetime import datetime, time, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -105,7 +104,6 @@ async def batch_exit(
 
     result = ExitBatchResult()
     schedule_time = _parse_hhmm(data.schedule_at) if data.schedule_at else None
-    tz = ZoneInfo(settings.scheduler_timezone)
 
     for day in days:
         if weekly_times:
@@ -127,7 +125,7 @@ async def batch_exit(
                 template_id=None,
                 payload=payload,
                 trigger_type="once",
-                run_at=datetime.combine(day, schedule_time, tzinfo=tz),
+                run_at=datetime.combine(day, schedule_time),
                 date_strategy="fixed",
                 enabled=True,
             )

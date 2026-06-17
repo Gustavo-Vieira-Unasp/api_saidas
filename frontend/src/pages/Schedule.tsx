@@ -14,7 +14,9 @@ import {
 } from "../services/api";
 import { MAX_BATCH_ITEMS } from "../constants/limits";
 import type { Schedule, Template } from "../types";
-import { fmtDateTime } from "../utils/fmt";
+import { fmtDateTime, fmtScheduleDateTime, parseAppDateTime } from "../utils/fmt";
+
+const TZ_LABEL = " (horário de Brasília)";
 
 type SortKey = "name" | "run_at" | "last_run_at" | "enabled";
 
@@ -24,13 +26,21 @@ function compareSchedules(a: Schedule, b: Schedule, key: SortKey): number {
       return a.name.localeCompare(b.name, "pt-BR");
     case "run_at": {
       // Earliest scheduled date first; recurring schedules (no run_at) last.
-      const av = a.run_at ? new Date(a.run_at).getTime() : Infinity;
-      const bv = b.run_at ? new Date(b.run_at).getTime() : Infinity;
+      const av = a.run_at
+        ? parseAppDateTime(a.run_at, "brasilia").getTime()
+        : Infinity;
+      const bv = b.run_at
+        ? parseAppDateTime(b.run_at, "brasilia").getTime()
+        : Infinity;
       return av - bv;
     }
     case "last_run_at": {
-      const av = a.last_run_at ? new Date(a.last_run_at).getTime() : -Infinity;
-      const bv = b.last_run_at ? new Date(b.last_run_at).getTime() : -Infinity;
+      const av = a.last_run_at
+        ? parseAppDateTime(a.last_run_at, "utc").getTime()
+        : -Infinity;
+      const bv = b.last_run_at
+        ? parseAppDateTime(b.last_run_at, "utc").getTime()
+        : -Infinity;
       return av - bv;
     }
     case "enabled":
@@ -45,11 +55,11 @@ function describe(s: Schedule): string {
       : "";
   switch (s.trigger_type) {
     case "once":
-      return `Uma vez em ${s.run_at ? fmtDateTime(s.run_at) : "?"}`;
+      return `Uma vez em ${s.run_at ? fmtScheduleDateTime(s.run_at) : "?"}${TZ_LABEL}`;
     case "daily":
-      return `Todos os dias às ${time}`;
+      return `Todos os dias às ${time}${TZ_LABEL}`;
     case "weekdays":
-      return `Seg a sex às ${time}`;
+      return `Seg a sex às ${time}${TZ_LABEL}`;
     case "cron":
       return `Cron: ${s.cron}`;
     default:

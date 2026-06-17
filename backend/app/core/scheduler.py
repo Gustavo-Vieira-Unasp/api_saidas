@@ -19,6 +19,7 @@ from apscheduler.triggers.date import DateTrigger
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.timezone_utils import to_scheduler_naive
 from app.core.submission_runner import run_async
 from app.db.database import _normalize_database_url
 
@@ -74,7 +75,14 @@ def _build_trigger(schedule) -> CronTrigger | DateTrigger:
     """Translate a Schedule row into an APScheduler trigger."""
     tz = settings.scheduler_timezone
     if schedule.trigger_type == "once":
-        return DateTrigger(run_date=schedule.run_at, timezone=tz)
+        run_at = to_scheduler_naive(schedule.run_at)
+        logger.info(
+            "Schedule %s once trigger at %s (%s)",
+            schedule.id,
+            run_at,
+            settings.scheduler_timezone,
+        )
+        return DateTrigger(run_date=run_at, timezone=tz)
     if schedule.trigger_type == "daily":
         return CronTrigger(
             hour=schedule.hour, minute=schedule.minute or 0, timezone=tz
