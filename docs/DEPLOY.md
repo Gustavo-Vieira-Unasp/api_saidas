@@ -235,6 +235,8 @@ Keep `DATABASE_URL` pointing at Supabase. Redeploy via Blueprint.
 | Playwright failed | Retry; free tier has less RAM |
 | UptimeRobot 405 | Use GET or HEAD on `/health`; redeploy latest backend |
 | Enviar hangs / provisional headers | Playwright takes minutes; API now returns immediately — redeploy backend, check Histórico |
+| Agendamento falhou "Nenhum campo preenchido" | Abra **Ver comprovante** no Histórico; confira se o formulário carregou. Teste **Enviar** manual no agendamento. Rode `python -m app.automation.discover` se o site UNASP mudou. |
+| Agendamento roda no horário errado | `SCHEDULER_TIMEZONE=America/Sao_Paulo` no Render. Hora do agendamento = quando a automação **executa**, não necessariamente `hora_saida` do formulário. |
 | Alembic error on startup | Check Render logs; run `alembic upgrade head` manually from Render shell if needed |
 
 ---

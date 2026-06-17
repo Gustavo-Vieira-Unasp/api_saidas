@@ -19,6 +19,7 @@ from apscheduler.triggers.date import DateTrigger
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.submission_runner import run_async
 from app.db.database import _normalize_database_url
 
 logger = logging.getLogger(__name__)
@@ -124,10 +125,10 @@ def run_scheduled_submission(schedule_id: int) -> None:
     from app.models.schedule import Schedule
     from app.services.submission import (
         SubmissionError,
-        apply_date_strategy,
+        execute_pending_submission,
+        prepare_schedule_payload,
         record_failed_submission,
-        resolve_payload,
-        run_submission,
+        start_submission,
     )
 
     db = SessionLocal()
@@ -137,19 +138,25 @@ def run_scheduled_submission(schedule_id: int) -> None:
             return
         user = schedule.user
         try:
-            resolved = resolve_payload(
-                db, user, schedule.template_id, schedule.payload
-            )
-            resolved = apply_date_strategy(resolved, schedule.date_strategy)
-            run_submission(
+            resolved = prepare_schedule_payload(db, user, schedule)
+            record = start_submission(
                 db,
                 user,
                 payload=resolved,
                 schedule_id=schedule.id,
                 source="schedule",
             )
+            run_async(execute_pending_submission(record.id))
+            db.refresh(record)
             schedule.last_run_at = datetime.now(UTC)
             db.commit()
+            if record.status == "failed":
+                logger.warning(
+                    "Scheduled submission schedule_id=%s exit_id=%s failed: %s",
+                    schedule_id,
+                    record.id,
+                    record.message,
+                )
         except SubmissionError as exc:
             logger.warning(
                 "Scheduled submission failed for schedule_id=%s: %s",
@@ -157,10 +164,7 @@ def run_scheduled_submission(schedule_id: int) -> None:
                 exc,
             )
             try:
-                resolved = resolve_payload(
-                    db, user, schedule.template_id, schedule.payload
-                )
-                resolved = apply_date_strategy(resolved, schedule.date_strategy)
+                resolved = prepare_schedule_payload(db, user, schedule)
             except SubmissionError:
                 resolved = schedule.payload or {}
             record_failed_submission(

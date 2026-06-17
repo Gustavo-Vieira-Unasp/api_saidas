@@ -21,7 +21,7 @@ from urllib.parse import urljoin
 from playwright.async_api import Page, async_playwright
 
 from app.automation import field_map as fm
-from app.automation.pensionato import Credentials, _login
+from app.automation.pensionato import Credentials, _login, _wait_for_form_ready
 from app.core.config import settings
 
 
@@ -68,8 +68,12 @@ async def discover(ra: str, senha: str, perfil: str, headless: bool) -> None:
             liberacao_url = urljoin(settings.pensionato_base_url, fm.LIBERACAO_PATH)
             print(f"-> Navegando para {liberacao_url}")
             await page.goto(liberacao_url, wait_until="domcontentloaded")
-            await page.wait_for_load_state("networkidle")
-            await page.wait_for_timeout(2000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=30_000)
+            except Exception:
+                pass
+            ready = await _wait_for_form_ready(page)
+            print(f"-> Formulário pronto: {ready}")
             print(f"-> URL do formulário: {page.url}")
 
             await _dump_fields(page)

@@ -10,9 +10,10 @@ All site-specific selectors/labels live in `field_map.py`. Set `dry_run=True`
 
 from __future__ import annotations
 
+import logging
 import math
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin
@@ -29,6 +30,13 @@ from app.automation.browser import (
 )
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
+# Headless on Render is slower; allow extra time for the SPA to mount.
+_FORM_READY_TIMEOUT_MS = 20_000 if settings.playwright_headless else 10_000
+_POST_NAV_SETTLE_MS = 800 if settings.playwright_headless else 300
+_FILL_RETRY_DELAY_MS = 2_000
+
 
 @dataclass
 class Credentials:
@@ -42,6 +50,26 @@ class SubmitResult:
     status: str  # "sent" | "failed"
     message: str
     screenshot_path: str | None = None
+
+
+@dataclass
+class FillReport:
+    filled: int = 0
+    skipped: list[str] = field(default_factory=list)
+    failed: list[tuple[str, str]] = field(default_factory=list)
+
+
+def _format_fill_failure(report: FillReport, page_url: str) -> str:
+    expected = len([k for k in fm.FORM if k not in report.skipped])
+    parts = [
+        f"Nenhum campo do formulário foi preenchido (0/{expected}). "
+        f"Página: {page_url}. "
+        "Confira o comprovante e os seletores em field_map.py."
+    ]
+    if report.failed:
+        detail = "; ".join(f"{name}: {reason}" for name, reason in report.failed[:6])
+        parts.append(f"Detalhes: {detail}.")
+    return " ".join(parts)
 
 
 def _screenshot_path(prefix: str) -> str:
@@ -131,6 +159,21 @@ async def _login(page: Page, credentials: Credentials) -> bool:
     if "/dashboard" in page.url:
         return True
     return await is_present(page, fm.LOGIN["post_login_marker"], timeout=6000)
+
+
+async def _wait_for_form_ready(page: Page) -> bool:
+    """Wait until the exit form (not just the login placeholder) has rendered."""
+    markers = getattr(fm, "FORM_READY_MARKERS", [fm.FORM_READY])
+    per_marker = max(_FORM_READY_TIMEOUT_MS // max(len(markers), 1), 4_000)
+    for selector in markers:
+        loc = page.locator(selector).first
+        try:
+            await loc.wait_for(state="visible", timeout=per_marker)
+        except Exception as exc:
+            logger.warning("Form not ready — marker %r: %s", selector, exc)
+            return False
+    await page.wait_for_timeout(_POST_NAV_SETTLE_MS)
+    return True
 
 
 # JS that reports every visible clock number with its on-screen center. The
@@ -312,19 +355,26 @@ async def _fill_one(page: Page, cfg: dict, value: str) -> bool:
     return True
 
 
-async def _fill_form(page: Page, form_data: dict) -> int:
+async def _fill_form(page: Page, form_data: dict) -> FillReport:
     """Fill every known field present in form_data (in spec order)."""
-    filled = 0
+    report = FillReport()
     for name, cfg in fm.FORM.items():
         value = form_data.get(name)
         if value in (None, ""):
+            report.skipped.append(name)
             continue
         try:
             if await _fill_one(page, cfg, value):
-                filled += 1
-        except Exception:
-            continue
-    return filled
+                report.filled += 1
+            else:
+                reason = f"locator/select failed for {cfg.get('kind')}"
+                report.failed.append((name, reason))
+                logger.warning("Field %s not filled: %s", name, reason)
+        except Exception as exc:
+            reason = str(exc) or exc.__class__.__name__
+            report.failed.append((name, reason))
+            logger.warning("Field %s raised: %s", name, reason, exc_info=True)
+    return report
 
 
 async def submit_exit(
@@ -355,19 +405,38 @@ async def submit_exit(
             # Navigate straight to the exit form (SPA keeps the auth token).
             liberacao_url = urljoin(settings.pensionato_base_url, fm.LIBERACAO_PATH)
             await page.goto(liberacao_url, wait_until="domcontentloaded")
-            await page.wait_for_load_state("networkidle")
+            try:
+                await page.wait_for_load_state("networkidle", timeout=30_000)
+            except Exception:
+                logger.warning("networkidle timeout on liberacao page; continuing")
 
-            # Wait for a form field to render before filling.
-            await locate(page, [fm.FORM_READY], timeout=10000)
-
-            filled = await _fill_form(page, form_data)
-            if filled == 0:
+            if not await _wait_for_form_ready(page):
                 await page.screenshot(path=screenshot)
                 return SubmitResult(
                     "failed",
-                    "Nenhum campo do formulário foi preenchido. Verifique field_map.py e as chaves do payload.",
+                    f"Formulário de liberação não carregou a tempo. Página: {page.url}. "
+                    "Veja o comprovante e field_map.py (FORM_READY_MARKERS).",
                     screenshot,
                 )
+
+            fill_report = await _fill_form(page, form_data)
+            if fill_report.filled == 0:
+                logger.warning(
+                    "First fill pass filled 0 fields; retrying after %sms",
+                    _FILL_RETRY_DELAY_MS,
+                )
+                await page.wait_for_timeout(_FILL_RETRY_DELAY_MS)
+                fill_report = await _fill_form(page, form_data)
+
+            if fill_report.filled == 0:
+                await page.screenshot(path=screenshot)
+                return SubmitResult(
+                    "failed",
+                    _format_fill_failure(fill_report, page.url),
+                    screenshot,
+                )
+
+            filled = fill_report.filled
 
             if dry_run:
                 await page.screenshot(path=screenshot)

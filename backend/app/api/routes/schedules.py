@@ -18,9 +18,8 @@ from app.schemas.schedule import (
 )
 from app.services.submission import (
     SubmissionError,
-    apply_date_strategy,
     execute_pending_submission,
-    resolve_payload,
+    prepare_schedule_payload,
     start_submission,
 )
 
@@ -152,8 +151,7 @@ def run_bulk(
     for schedule_id in data.schedule_ids:
         schedule = _get_owned(db, user, schedule_id)
         try:
-            resolved = resolve_payload(db, user, schedule.template_id, schedule.payload)
-            resolved = apply_date_strategy(resolved, schedule.date_strategy)
+            resolved = prepare_schedule_payload(db, user, schedule)
             record = start_submission(
                 db,
                 user,
@@ -181,8 +179,7 @@ def run_now(
 ):
     schedule = _get_owned(db, user, schedule_id)
     try:
-        resolved = resolve_payload(db, user, schedule.template_id, schedule.payload)
-        resolved = apply_date_strategy(resolved, schedule.date_strategy)
+        resolved = prepare_schedule_payload(db, user, schedule)
         record = start_submission(
             db,
             user,

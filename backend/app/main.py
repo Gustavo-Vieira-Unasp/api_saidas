@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 
+import asyncio
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -13,6 +15,7 @@ from app.api.routes import auth, exits, meta, schedules, templates
 from app.core.config import settings, validate_settings
 from app.core.rate_limit import limiter
 from app.core.scheduler import get_scheduler, shutdown_scheduler, start_scheduler
+from app.core.submission_runner import set_main_loop
 from app.db.database import get_db, init_db
 
 
@@ -20,6 +23,7 @@ from app.db.database import get_db, init_db
 async def lifespan(app: FastAPI):
     validate_settings()
     init_db()
+    set_main_loop(asyncio.get_running_loop())
     start_scheduler()
     yield
     shutdown_scheduler()

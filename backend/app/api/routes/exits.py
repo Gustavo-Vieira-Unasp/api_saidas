@@ -23,6 +23,7 @@ from app.schemas.exit_request import (
 )
 from app.services.submission import (
     SubmissionError,
+    apply_weekly_times_for_date,
     execute_pending_submission,
     record_failed_submission,
     resolve_payload,
@@ -107,12 +108,13 @@ async def batch_exit(
     tz = ZoneInfo(settings.scheduler_timezone)
 
     for day in days:
-        payload = {**base, "data_saida": day.isoformat()}
-        wt = (weekly_times or {}).get(str(day.weekday()))
-        if wt:
-            payload["hora_saida"] = wt.get("hora_saida", "")
-            payload["hora_retorno"] = wt.get("hora_retorno", "")
+        if weekly_times:
+            payload = apply_weekly_times_for_date(
+                {**base, "data_saida": day.isoformat(), "weekly_times": weekly_times},
+                day,
+            )
         else:
+            payload = {**base, "data_saida": day.isoformat()}
             if data.hora_saida:
                 payload["hora_saida"] = data.hora_saida
             if data.hora_retorno:

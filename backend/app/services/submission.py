@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -14,6 +13,7 @@ from app.core.config import settings
 from app.core.security import decrypt_secret
 from app.db.database import SessionLocal
 from app.models.exit_request import ExitRequest
+from app.models.schedule import Schedule
 from app.models.template import Template
 from app.models.user import User
 
@@ -50,6 +50,44 @@ def apply_date_strategy(payload: dict, strategy: str | None) -> dict:
     else:
         return payload
     return {**payload, "data_saida": target.isoformat()}
+
+
+def apply_weekly_times(payload: dict, when: datetime | None = None) -> dict:
+    """Apply per-weekday hora_saida/hora_retorno from template weekly_times."""
+    result = dict(payload)
+    weekly_times = result.pop("weekly_times", None)
+    if not weekly_times:
+        return result
+
+    tz = ZoneInfo(settings.scheduler_timezone)
+    ref = when or datetime.now(tz)
+    if ref.tzinfo is None:
+        weekday = ref.date().weekday()
+    else:
+        weekday = ref.astimezone(tz).date().weekday()
+
+    wt = weekly_times.get(str(weekday))
+    if wt:
+        if wt.get("hora_saida"):
+            result["hora_saida"] = wt["hora_saida"]
+        if wt.get("hora_retorno"):
+            result["hora_retorno"] = wt["hora_retorno"]
+    return result
+
+
+def apply_weekly_times_for_date(payload: dict, day: date) -> dict:
+    """Apply weekly_times for a specific calendar day (batch sends)."""
+    return apply_weekly_times(
+        payload,
+        datetime.combine(day, datetime.min.time(), tzinfo=ZoneInfo(settings.scheduler_timezone)),
+    )
+
+
+def prepare_schedule_payload(db: Session, user: User, schedule: Schedule) -> dict:
+    """Resolve template payload and apply date strategy + weekly times (America/Sao_Paulo)."""
+    resolved = resolve_payload(db, user, schedule.template_id, schedule.payload)
+    resolved = apply_date_strategy(resolved, schedule.date_strategy)
+    return apply_weekly_times(resolved)
 
 
 def _credentials(user: User) -> Credentials:
@@ -182,9 +220,11 @@ def run_submission(
     source: str = "manual",
     dry_run: bool = False,
 ) -> ExitRequest:
-    """Synchronous entry point for APScheduler jobs and CLI tools."""
-    return asyncio.run(
-        run_submission_async(
+    """Synchronous entry point; runs Playwright on the FastAPI event loop when available."""
+    from app.core.submission_runner import run_async
+
+    async def _run() -> ExitRequest:
+        return await run_submission_async(
             db,
             user,
             template_id=template_id,
@@ -193,4 +233,5 @@ def run_submission(
             source=source,
             dry_run=dry_run,
         )
-    )
+
+    return run_async(_run())

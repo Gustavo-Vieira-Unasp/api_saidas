@@ -94,7 +94,14 @@ FORM = {
 }
 
 # A field that must exist before we start filling (form has rendered).
+# Login also uses placeholder "Digite aqui" — require several exit-form markers.
 FORM_READY = 'input[placeholder="Digite aqui"]'
+FORM_READY_MARKERS = [
+    'input[type="radio"]',
+    "select",
+    'input[type="date"]',
+    "textarea",
+]
 
 # Custom clock-picker dialog ("tp-ui") opened by clicking a time field.
 # Hour/minute are role="option" spans; confirm with the "Definir" button.
@@ -123,11 +130,10 @@ MOTIVO_OPTIONS = [
 ]
 COM_QUEM_OPTIONS = ["Sozinho", "Amigo", "Familiar", "UNASP"]
 
-# Submit: the visible green button on the form is "Confirmar". A second modal
-# confirmation may appear afterwards (handled by FORM_CONFIRM).
+# Submit: primary action is "Enviar"; a confirmation modal may follow (FORM_CONFIRM).
 FORM_SUBMIT = [
-    "button:has-text('Confirmar')",
     "button:has-text('Enviar')",
+    "button:has-text('Confirmar')",
     "button:has-text('Solicitar')",
 ]
 # Possible follow-up confirmation in a dialog/modal.
